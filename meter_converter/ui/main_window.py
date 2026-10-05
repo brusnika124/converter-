@@ -59,7 +59,7 @@ class MainWindow:
         self._lock_open_icon = self._load_ui_icon("lock_open.png")
 
         self.root.title("Обработка профилей")
-        self.root.geometry("560x840")
+        self.root.geometry("560x890")
         self.root.configure(bg=APP_BG)
         self.root.resizable(False, False)
         self._set_icon()
@@ -106,7 +106,7 @@ class MainWindow:
         self.segment_canvas.bind("<Button-1>", self._on_segment_click)
         self._draw_segment()
 
-        card_width, card_height = 480, 680
+        card_width, card_height = 480, 730
         card_x, card_y = 40, 96
         self.card_canvas = tk.Canvas(
             self.root,
