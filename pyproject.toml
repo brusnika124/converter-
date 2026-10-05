@@ -13,6 +13,7 @@ dependencies = [
     "lxml>=5.0",
     "tkinterdnd2>=0.4.2",
     "xlrd>=2.0",
+    "Pillow>=10.0",
 ]
 
 [tool.pytest.ini_options]

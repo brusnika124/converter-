@@ -1,18 +1,2 @@
-__pycache__/
-*.py[cod]
 
-.venv/
-venv/
-
-.idea/
-.vscode/
-
-.pytest_cache/
-
-*.log
-
-dist/
-build/
-
-.DS_Store
-Thumbs.db
+/справочники/

@@ -22,6 +22,10 @@ def run() -> None:
 
     project_root = Path(__file__).resolve().parent.parent
     reference_directory = project_root / "справочники"
-    service = ConverterService(reference_directory=reference_directory)
+    loading_statement_template = project_root / "шаблон загрузочной ведомости.xlsx"
+    service = ConverterService(
+        reference_directory=reference_directory,
+        loading_statement_template=loading_statement_template,
+    )
     MainWindow(root, service)
     root.mainloop()
