@@ -51,12 +51,15 @@ class MainWindow:
         self._selector_card_images: dict[tuple[str, bool], ImageTk.PhotoImage] = {}
         self._dropzone_images: dict[tuple[bool, bool], ImageTk.PhotoImage] = {}
         self._lock_hover = False
+        self.loading_statement_enabled = False
+        self._loading_statement_hover = False
+        self._statement_export_hover = False
         self._trash_icon = self._load_ui_icon("trash.png")
         self._lock_closed_icon = self._load_ui_icon("lock_closed.png")
         self._lock_open_icon = self._load_ui_icon("lock_open.png")
 
         self.root.title("Обработка профилей")
-        self.root.geometry("560x760")
+        self.root.geometry("560x890")
         self.root.configure(bg=APP_BG)
         self.root.resizable(False, False)
         self._set_icon()
@@ -103,7 +106,7 @@ class MainWindow:
         self.segment_canvas.bind("<Button-1>", self._on_segment_click)
         self._draw_segment()
 
-        card_width, card_height = 480, 600
+        card_width, card_height = 480, 730
         card_x, card_y = 40, 96
         self.card_canvas = tk.Canvas(
             self.root,
@@ -253,20 +256,50 @@ class MainWindow:
             bg=CARD_BG,
             fg=TEXT_GRAY,
         )
-        self.lookup_status.pack(anchor="w", pady=(0, 8))
+        self.lookup_status.pack(anchor="w", pady=(0, 6))
+
+        self.loading_statement_canvas = tk.Canvas(
+            inner,
+            width=card_width - 56,
+            height=34,
+            bg=CARD_BG,
+            highlightthickness=0,
+            cursor="hand2",
+        )
+        self.loading_statement_canvas.pack(anchor="w", pady=(0, 8))
+        self.loading_statement_canvas.bind("<Button-1>", lambda _: self._toggle_loading_statement())
+        self.loading_statement_canvas.bind("<Enter>", self._on_loading_statement_enter)
+        self.loading_statement_canvas.bind("<Leave>", self._on_loading_statement_leave)
+        self._draw_loading_statement_toggle()
+
+        self.actions_frame = tk.Frame(inner, bg=CARD_BG)
+        self.actions_frame.pack(side="bottom", fill="x", pady=(8, 0))
 
         self.convert_canvas = tk.Canvas(
-            inner,
+            self.actions_frame,
             width=card_width - 56,
             height=50,
             bg=CARD_BG,
             highlightthickness=0,
         )
-        self.convert_canvas.pack(side="bottom", pady=(10, 0))
+        self.convert_canvas.pack()
         self.convert_canvas.bind("<Button-1>", lambda _: self.convert_file())
         self.convert_canvas.bind("<Enter>", lambda _: self._draw_convert_button(True))
         self.convert_canvas.bind("<Leave>", lambda _: self._draw_convert_button(False))
         self._draw_convert_button()
+
+        self.statement_export_canvas = tk.Canvas(
+            self.actions_frame,
+            width=card_width - 56,
+            height=46,
+            bg=CARD_BG,
+            highlightthickness=0,
+        )
+        self.statement_export_canvas.pack(pady=(8, 0))
+        self.statement_export_canvas.bind("<Button-1>", lambda _: self.export_loading_statement())
+        self.statement_export_canvas.bind("<Enter>", self._on_statement_export_enter)
+        self.statement_export_canvas.bind("<Leave>", self._on_statement_export_leave)
+        self._draw_statement_export_button()
         self._apply_mode()
 
     def _bind_drag_and_drop(self) -> None:
@@ -727,6 +760,134 @@ class MainWindow:
         draw_round_rect(canvas, 1, 1, width - 1, height - 1, radius=14, fill=color, outline="")
         canvas.create_text(width / 2, height / 2 - (2 if hover else 0), text="КОНВЕРТИРОВАТЬ", font=("Segoe UI", 11, "bold"), fill="white")
 
+    def _draw_loading_statement_toggle(self) -> None:
+        canvas = self.loading_statement_canvas
+        canvas.delete("all")
+        selected = self.loading_statement_enabled
+        hover = self._loading_statement_hover
+
+        box_left, box_top, box_size = 2, 7, 20
+        fill = ACCENT_BLUE if selected else ("#f7fbff" if hover else "white")
+        outline = ACCENT_BLUE if selected else ("#9ecbff" if hover else BORDER_LIGHT)
+        draw_round_rect(
+            canvas,
+            box_left,
+            box_top,
+            box_left + box_size,
+            box_top + box_size,
+            radius=6,
+            fill=fill,
+            outline=outline,
+            width=1,
+        )
+        if selected:
+            canvas.create_line(
+                box_left + 5,
+                box_top + 10,
+                box_left + 9,
+                box_top + 14,
+                box_left + 16,
+                box_top + 6,
+                fill="white",
+                width=2,
+                capstyle=tk.ROUND,
+                joinstyle=tk.ROUND,
+            )
+        canvas.create_text(
+            32,
+            17,
+            anchor="w",
+            text="Формировать загрузочную ведомость",
+            font=("Segoe UI", 9),
+            fill=TEXT_DARK,
+        )
+
+    def _toggle_loading_statement(self) -> None:
+        self.loading_statement_enabled = not self.loading_statement_enabled
+        self._draw_loading_statement_toggle()
+
+    def _on_loading_statement_enter(self, _event) -> None:
+        self._loading_statement_hover = True
+        self._draw_loading_statement_toggle()
+
+    def _on_loading_statement_leave(self, _event) -> None:
+        self._loading_statement_hover = False
+        self._draw_loading_statement_toggle()
+
+    def _draw_statement_export_button(self) -> None:
+        canvas = self.statement_export_canvas
+        canvas.delete("all")
+        width, height = int(canvas["width"]), int(canvas["height"])
+        enabled = self.service.has_loading_statement_data
+
+        if enabled:
+            fill = ACCENT_BLUE_LIGHT if self._statement_export_hover else "white"
+            outline = ACCENT_BLUE
+            text_color = ACCENT_BLUE
+            cursor = "hand2"
+        else:
+            fill = "#f7f8fa"
+            outline = "#e2e6ec"
+            text_color = "#a5adb9"
+            cursor = "arrow"
+
+        draw_round_rect(
+            canvas,
+            1,
+            1,
+            width - 1,
+            height - 1,
+            radius=13,
+            fill=fill,
+            outline=outline,
+            width=1,
+        )
+        canvas.create_text(
+            width / 2,
+            height / 2,
+            text="ВЫГРУЗИТЬ ВЕДОМОСТЬ",
+            font=("Segoe UI", 10, "bold"),
+            fill=text_color,
+        )
+        canvas.configure(cursor=cursor)
+
+    def _on_statement_export_enter(self, _event) -> None:
+        if self.service.has_loading_statement_data:
+            self._statement_export_hover = True
+            self._draw_statement_export_button()
+
+    def _on_statement_export_leave(self, _event) -> None:
+        if self._statement_export_hover:
+            self._statement_export_hover = False
+            self._draw_statement_export_button()
+
+    def export_loading_statement(self) -> None:
+        if not self.service.has_loading_statement_data:
+            messagebox.showwarning(
+                "Загрузочная ведомость",
+                "Сначала обработайте хотя бы один профиль с включенной опцией "
+                "«Формировать загрузочную ведомость»."
+            )
+            return
+
+        path = filedialog.asksaveasfilename(
+            title="Сохранить загрузочную ведомость",
+            defaultextension=".xlsx",
+            filetypes=[("Excel files", "*.xlsx")],
+            initialfile="Загрузочная ведомость.xlsx",
+        )
+        if not path:
+            return
+
+        try:
+            self.service.export_loading_statement(Path(path))
+            messagebox.showinfo(
+                "Готово",
+                f"Загрузочная ведомость сохранена!\n{path}",
+            )
+        except Exception as exc:
+            messagebox.showerror("Ошибка", str(exc))
+
     def _apply_mode(self) -> None:
         self.reference_frame.pack(after=self.dropzone, pady=(0, 14))
         self._refresh_reference_directory()
@@ -820,6 +981,9 @@ class MainWindow:
 
     def _on_lock_leave(self, _event) -> None:
         self._lock_hover = False
+        self.loading_statement_enabled = False
+        self._loading_statement_hover = False
+        self._statement_export_hover = False
         self._draw_lock_button()
 
     def _update_entry_label(self) -> None:
@@ -1004,7 +1168,9 @@ class MainWindow:
                 mode=ProcessingMode(self.mode.get()),
                 input_text=current_value,
                 input_type=InputValueType(self.input_type.get()),
+                include_in_loading_statement=self.loading_statement_enabled,
             )
+            self._draw_statement_export_button()
             messagebox.showinfo("Готово", f"Файл сохранён!\n{result.output_path}")
         except Exception as exc:
             messagebox.showerror("Ошибка", str(exc))

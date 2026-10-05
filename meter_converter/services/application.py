@@ -13,6 +13,7 @@ from meter_converter.errors import ConverterError
 from meter_converter.parsers.registry import ParserRegistry
 from meter_converter.services.excel_exporter import ExcelProfileExporter
 from meter_converter.services.output_path import OutputPathGenerator
+from meter_converter.services.loading_statement import LoadingStatementService
 from meter_converter.services.reference_catalog import ReferenceCatalog
 from meter_converter.services.reference_directory import (
     ReferenceDirectoryLoader,
@@ -32,12 +33,14 @@ class ConverterService:
         exporter: ExcelProfileExporter | None = None,
         output_paths: OutputPathGenerator | None = None,
         reference_directory: Path | None = None,
+        loading_statement_template: Path | None = None,
     ) -> None:
         self.parsers = parsers or ParserRegistry()
         self.validator = validator or TimelineValidator()
         self.references = references or ReferenceCatalog()
         self.exporter = exporter or ExcelProfileExporter()
         self.output_paths = output_paths or OutputPathGenerator()
+        self.loading_statement = LoadingStatementService(loading_statement_template)
         self.reference_loader = (
             ReferenceDirectoryLoader(reference_directory)
             if reference_directory is not None
@@ -69,6 +72,13 @@ class ConverterService:
     def has_references(self) -> bool:
         return not self.references.is_empty
 
+    @property
+    def has_loading_statement_data(self) -> bool:
+        return self.loading_statement.has_data
+
+    def export_loading_statement(self, output_path: Path) -> None:
+        self.loading_statement.export(output_path)
+
     def suggest_kt(self, source_path: Path) -> float | None:
         """Auto-mode preview: lookup the point number from the source folder name."""
         self.refresh_references()
@@ -90,6 +100,7 @@ class ConverterService:
         mode: ProcessingMode,
         input_text: str = "",
         input_type: InputValueType = InputValueType.POINT,
+        include_in_loading_statement: bool = False,
     ) -> ConversionResult:
         if not source_path.exists():
             raise ConverterError("Выбранный файл не существует.")
@@ -102,10 +113,18 @@ class ConverterService:
             input_type=input_type,
         )
 
+        statement_point_number = point_number
+        if include_in_loading_statement and not statement_point_number:
+            if mode == ProcessingMode.AUTO:
+                statement_point_number = source_path.parent.name.strip()
+            if not statement_point_number:
+                raise ConverterError(
+                    "Для формирования загрузочной ведомости необходимо определить номер точки учета."
+                )
+
         parser = self.parsers.for_path(source_path)
         profile = self.validator.validate(parser.parse(source_path))
         output_path = self.output_paths.next_path(source_path)
-
         self.exporter.export(
             profile=profile,
             output_path=output_path,
@@ -113,6 +132,15 @@ class ConverterService:
             point_number=point_number,
             reference_provider=provider,
         )
+
+        if include_in_loading_statement and statement_point_number:
+            self.loading_statement.add_profile(
+                profile=profile,
+                point_number=statement_point_number,
+                fallback_kt=kt,
+                reference_provider=provider,
+            )
+
         return ConversionResult(output_path=output_path)
 
     def _resolve_context(
